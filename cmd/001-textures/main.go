@@ -94,6 +94,7 @@ func main() {
 			yaw: math.Pi,
 			pos: vec3{0, 10, -10},
 		},
+		context: &context{},
 	}
 
 	ebiten.SetWindowTitle("001-textures")
@@ -108,6 +109,7 @@ func main() {
 }
 
 type game struct {
+	context   *context
 	cycle     float32
 	texture   *ebiten.Image
 	mesh      *mesh
@@ -489,7 +491,6 @@ func (ctx *context) sort_triangles() {
 }
 
 func (ctx *context) draw_triangles(texture, target *ebiten.Image) {
-
 	tex_width := float(texture.Bounds().Dx())
 	tex_height := float(texture.Bounds().Dy())
 
@@ -558,7 +559,8 @@ func (self *game) Draw(screen *ebiten.Image) {
 		}
 	}(time.Now())
 
-	var ctx context
+	ctx := self.context
+
 	w := screen.Bounds().Dx()
 	h := screen.Bounds().Dy()
 
