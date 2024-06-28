@@ -255,7 +255,7 @@ func (c *context) ndc_to_screen(src vec4) vec4 {
 }
 
 func (self *game) Layout(outerWidth, outerHeight int) (int, int) {
-	return outerWidth, outerHeight
+	return game_width, game_height
 }
 
 func (self *game) Update() error {
