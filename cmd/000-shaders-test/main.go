@@ -90,17 +90,13 @@ type Game struct {
 	frametime time.Duration
 }
 
-type vertex struct {
-	position vec3
-}
-
 type triangle struct {
 	v1, v2, v3 uint16
 	rgba       vec4
 }
 
 type mesh struct {
-	vertices  []vertex
+	vertices  []vec3
 	triangles []triangle
 }
 
@@ -123,9 +119,7 @@ func load_obj(src []byte) (*mesh, error) {
 			if _, err := fmt.Fscanf(reader, "%f %f %f", &x, &y, &z); err != nil {
 				return nil, fmt.Errorf("bad vertex: %w", err)
 			}
-			mesh.vertices = append(mesh.vertices, vertex{
-				position: vec3{x, y, z},
-			})
+			mesh.vertices = append(mesh.vertices, vec3{x, y, z})
 		case "f":
 			var a, b, c uint16
 			if _, err := fmt.Fscanf(reader, "%d %d %d", &a, &b, &c); err != nil {
@@ -256,7 +250,7 @@ func (self *Game) Draw(screen *ebiten.Image) {
 
 	var clip_vertices []vec4
 	for _, vertex := range self.suzanne.vertices {
-		vertex := projection_view_matrix.Mul4x1(vertex.position.Vec4(1))
+		vertex := projection_view_matrix.Mul4x1(vertex.Vec4(1))
 		clip_vertices = append(clip_vertices, vertex)
 	}
 
