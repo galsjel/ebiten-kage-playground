@@ -92,7 +92,6 @@ type Game struct {
 
 type vertex struct {
 	position vec3
-	color    vec3
 }
 
 type triangle struct {
