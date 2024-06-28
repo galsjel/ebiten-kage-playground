@@ -524,8 +524,6 @@ func (self *game) Draw(screen *ebiten.Image) {
 		return 1
 	})
 
-	// TODO: loop screen_vertices and populate vertices when we start using vertex color instead of triangle
-
 	tex_width := float(self.image.Bounds().Dx())
 	tex_height := float(self.image.Bounds().Dy())
 
