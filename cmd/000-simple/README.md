@@ -1,7 +1,9 @@
 
-# 000 - Shaders Test
+# 000 - Simple
 
-I'm experimenting with a basic vertex pipeline that performs the following operations on Suzanne:
+Rendering a model with colored triangles. Simple as that.
+
+A basic vertex pipeline that performs the following operations on Suzanne:
 
 1. Transforms `suzanne.vertices` from Local Space -> Clip Space into a `clip_vertices` buffer.
 2. Iterates `suzanne.triangles`, discarding any with a vertex that is out of bounds.
