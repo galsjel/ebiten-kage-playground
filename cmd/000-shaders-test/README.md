@@ -13,3 +13,5 @@ I'm experimenting with a basic vertex pipeline that performs the following opera
 6. Sort the `screen_triangles` slice based on the triangle's `average_z` in screen space.
 7. Iterate each `screen_triangle` and populate `indices` and `vertices` with data from `screen_vertices` to be used with `screen.DrawTriangles`.
 8. Done!
+
+![Suzanne in all her colorful glory!](preview.webp)
