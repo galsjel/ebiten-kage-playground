@@ -11,9 +11,11 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"time"
 
 	"github.com/go-gl/mathgl/mgl32"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 const (
@@ -71,6 +73,7 @@ func main() {
 
 	ebiten.SetWindowTitle("000-shaders-test")
 	ebiten.SetWindowSize(game_width, game_height)
+	ebiten.SetVsyncEnabled(false)
 
 	err = ebiten.RunGame(game)
 
@@ -80,10 +83,11 @@ func main() {
 }
 
 type Game struct {
-	cycle   float32
-	shader  *ebiten.Shader
-	white   *ebiten.Image
-	suzanne *mesh
+	cycle     float32
+	shader    *ebiten.Shader
+	white     *ebiten.Image
+	suzanne   *mesh
+	frametime time.Duration
 }
 
 type vertex struct {
@@ -213,6 +217,15 @@ func (self *Game) Update() error {
 }
 
 func (self *Game) Draw(screen *ebiten.Image) {
+	defer func(t time.Time) {
+		ft := time.Now().Sub(t)
+		if self.frametime == 0 {
+			self.frametime = ft
+		} else {
+			self.frametime += (ft - self.frametime) / 2
+		}
+	}(time.Now())
+
 	var ctx context
 	w := screen.Bounds().Dx()
 	h := screen.Bounds().Dy()
@@ -339,4 +352,7 @@ func (self *Game) Draw(screen *ebiten.Image) {
 	screen.DrawTriangles(vertices, indices, self.white, &ebiten.DrawTrianglesOptions{
 		AntiAlias: true,
 	})
+
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f (%v)", ebiten.ActualFPS(), self.frametime))
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Triangles: %d", len(screen_triangles)), 0, 14)
 }
