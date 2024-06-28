@@ -66,10 +66,14 @@ func main() {
 		panic(err)
 	}
 
-	game := &Game{
+	game := &game{
 		shader: shader,
 		image:  ebiten.NewImageFromImage(image),
 		mesh:   mesh,
+		camera: camera{
+			yaw: math.Pi,
+			pos: vec3{0, 10, -10},
+		},
 	}
 
 	ebiten.SetWindowTitle("001-textures")
@@ -83,12 +87,29 @@ func main() {
 	}
 }
 
-type Game struct {
+type game struct {
 	cycle     float32
 	shader    *ebiten.Shader
 	image     *ebiten.Image
 	mesh      *mesh
 	frametime time.Duration
+	camera    camera
+}
+
+type camera struct {
+	pitch float
+	yaw   float
+	pos   vec3
+
+	drag_x   int
+	drag_y   int
+	dragging bool
+
+	up      vec3
+	forward vec3
+	right   vec3
+
+	view_matrix mat4
 }
 
 type triangle struct {
@@ -214,16 +235,63 @@ func (c *context) ndc_to_screen(src vec3) vec3 {
 	}
 }
 
-func (self *Game) Layout(outerWidth, outerHeight int) (int, int) {
+func (self *game) Layout(outerWidth, outerHeight int) (int, int) {
 	return game_width, game_height
 }
 
-func (self *Game) Update() error {
+func (self *game) Update() error {
 	self.cycle++
+
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		cx, cy := ebiten.CursorPosition()
+
+		// doing the logic in the next update ensures we don't get some crazy snapping
+		if !self.camera.dragging {
+			self.camera.dragging = true
+		} else {
+			dx := float(cx-self.camera.drag_x) / 100.0
+			dy := float(cy-self.camera.drag_y) / 100.0
+
+			self.camera.pitch = mgl32.Clamp(self.camera.pitch+dy, -math.Pi/2, math.Pi/2)
+			self.camera.yaw -= dx
+
+			view := mgl32.Ident4()
+			view = view.Mul4(mgl32.HomogRotate3DX(self.camera.pitch))
+			view = view.Mul4(mgl32.HomogRotate3DY(self.camera.yaw))
+
+			self.camera.right = view.Row(0).Vec3().Mul(-1)
+			self.camera.up = view.Row(1).Vec3()
+			self.camera.forward = view.Row(2).Vec3().Mul(-1)
+
+			if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
+				self.camera.pos = self.camera.pos.Add(self.camera.forward)
+			} else if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) {
+				self.camera.pos = self.camera.pos.Sub(self.camera.forward)
+			}
+
+			if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) {
+				self.camera.pos = self.camera.pos.Add(self.camera.right)
+			} else if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
+				self.camera.pos = self.camera.pos.Sub(self.camera.right)
+			}
+
+			self.camera.view_matrix = view.Mul4(mgl32.Translate3D(
+				-self.camera.pos.X(),
+				-self.camera.pos.Y(),
+				-self.camera.pos.Z(),
+			))
+		}
+
+		self.camera.drag_x = cx
+		self.camera.drag_y = cy
+	} else {
+		self.camera.dragging = false
+	}
+
 	return nil
 }
 
-func (self *Game) Draw(screen *ebiten.Image) {
+func (self *game) Draw(screen *ebiten.Image) {
 	defer func(t time.Time) {
 		ft := time.Now().Sub(t)
 		if self.frametime == 0 {
@@ -236,29 +304,25 @@ func (self *Game) Draw(screen *ebiten.Image) {
 	var ctx context
 	w := screen.Bounds().Dx()
 	h := screen.Bounds().Dy()
+
 	ctx.set_viewport(0, 0, w, h)
-
-	// we'll use the cursor to give a little control to the camera
-	cx, cy := ebiten.CursorPosition()
-
-	cycle := float64(self.cycle) / 200.0
-	cycle -= float64(cx) / 100
-
-	const eye_distance = 20
-	eye_x := float(math.Cos(cycle) * eye_distance)
-	eye_y := 10 + (-1 * float(h/2-cy) / 100)
-	eye_z := float(math.Sin(cycle) * eye_distance)
-	eye := vec3{eye_x, eye_y, eye_z}
-	center := vec3{0, 10, 0}
-	up := vec3{0, 1, 0}
-
-	ctx.look_at(eye, center, up)
 
 	// If you use orthographic then the Z axis will invert for everything.
 	// https://www.songho.ca/opengl/gl_projectionmatrix.html#perspective
 	// ctx.set_orthographic(-eye_distance*game_aspect, eye_distance*game_aspect, eye_distance, -eye_distance, 0.1, 10)
 
 	ctx.set_perpsective(30, game_aspect, 0.1, 100)
+
+	// the camera view matrix is invalid until the user controls it
+	if self.camera.view_matrix.Det() == 0 {
+		ctx.look_at(
+			vec3{0, 10, -10},
+			vec3{0, 10, 10},
+			vec3{0, 1, 0},
+		)
+	} else {
+		ctx.view_matrix = self.camera.view_matrix
+	}
 
 	projection_view_matrix := ctx.projection_view_matrix()
 
@@ -373,6 +437,6 @@ func (self *Game) Draw(screen *ebiten.Image) {
 		AntiAlias: true,
 	})
 
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f (%v)", ebiten.ActualFPS(), self.frametime))
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f (%v)", ebiten.ActualTPS(), self.frametime))
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Triangles: %d", len(screen_triangles)), 0, 14)
 }
