@@ -363,6 +363,7 @@ func (self *game) Draw(screen *ebiten.Image) {
 
 		if clip_out_of_bounds(v1) || clip_out_of_bounds(v2) || clip_out_of_bounds(v3) {
 			// TODO: clip triangle
+			// https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm
 		} else {
 			push_triangle(uint16(index), v1, v2, v3)
 		}
