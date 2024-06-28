@@ -31,25 +31,10 @@ type (
 	mat4  = mgl32.Mat4
 )
 
-var shader_source = `
-//kage:unit pixels
-package main
-
-func Fragment(dst vec4, src vec2, color vec4) vec4 {
-	return color
-}
-`
-
 //go:embed suzanne.obj
 var suzanne_obj []byte
 
 func main() {
-	shader, err := ebiten.NewShader([]byte(shader_source))
-
-	if err != nil {
-		panic(err)
-	}
-
 	mesh, err := load_obj(suzanne_obj)
 
 	if err != nil {
@@ -66,7 +51,6 @@ func main() {
 	white.Fill(color.White)
 
 	game := &Game{
-		shader:  shader,
 		white:   white,
 		suzanne: mesh,
 	}
@@ -84,7 +68,6 @@ func main() {
 
 type Game struct {
 	cycle     float32
-	shader    *ebiten.Shader
 	white     *ebiten.Image
 	suzanne   *mesh
 	frametime time.Duration

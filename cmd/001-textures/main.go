@@ -48,12 +48,6 @@ var diffuse_jpg []byte
 var diffuse *ebiten.Image
 
 func main() {
-	shader, err := ebiten.NewShader([]byte(shader_source))
-
-	if err != nil {
-		panic(err)
-	}
-
 	mesh, err := load_obj(wall_obj)
 
 	if err != nil {
@@ -67,9 +61,8 @@ func main() {
 	}
 
 	game := &game{
-		shader: shader,
-		image:  ebiten.NewImageFromImage(image),
-		mesh:   mesh,
+		image: ebiten.NewImageFromImage(image),
+		mesh:  mesh,
 		camera: camera{
 			yaw: math.Pi,
 			pos: vec3{0, 10, -10},
@@ -89,7 +82,6 @@ func main() {
 
 type game struct {
 	cycle     float32
-	shader    *ebiten.Shader
 	image     *ebiten.Image
 	mesh      *mesh
 	frametime time.Duration
