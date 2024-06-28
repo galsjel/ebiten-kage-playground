@@ -333,34 +333,38 @@ func (self *game) Draw(screen *ebiten.Image) {
 	var screen_vertices []vec3
 	var screen_triangles []screen_triangle
 
-	for index, triangle := range self.mesh.triangles {
-		c0 := clip_vertices[triangle.v1]
-		c1 := clip_vertices[triangle.v2]
-		c2 := clip_vertices[triangle.v3]
+	push_triangle := func(index uint16, v1, v2, v3 vec4) {
+		ndc1 := ctx.clip_to_ndc(v1)
+		ndc2 := ctx.clip_to_ndc(v2)
+		ndc3 := ctx.clip_to_ndc(v3)
 
-		if clip_out_of_bounds(c0) || clip_out_of_bounds(c1) || clip_out_of_bounds(c2) {
+		// back-face culling
+		if (ndc2.X()-ndc1.X())*(ndc3.Y()-ndc1.Y())-(ndc3.X()-ndc1.X())*(ndc2.Y()-ndc1.Y()) <= 0 {
+			return
+		}
+
+		s1 := ctx.ndc_to_screen(ndc1)
+		s2 := ctx.ndc_to_screen(ndc2)
+		s3 := ctx.ndc_to_screen(ndc3)
+
+		screen_triangles = append(screen_triangles, screen_triangle{
+			index:        uint16(index),
+			first_vertex: uint16(len(screen_vertices)),
+			average_z:    (s1.Z() + s2.Z() + s3.Z()) / 3,
+		})
+
+		screen_vertices = append(screen_vertices, s1, s2, s3)
+	}
+
+	for index, triangle := range self.mesh.triangles {
+		v1 := clip_vertices[triangle.v1]
+		v2 := clip_vertices[triangle.v2]
+		v3 := clip_vertices[triangle.v3]
+
+		if clip_out_of_bounds(v1) || clip_out_of_bounds(v2) || clip_out_of_bounds(v3) {
 			// TODO: clip triangle
 		} else {
-			ndc0 := ctx.clip_to_ndc(c0)
-			ndc1 := ctx.clip_to_ndc(c1)
-			ndc2 := ctx.clip_to_ndc(c2)
-
-			// back-face culling
-			if (ndc1.X()-ndc0.X())*(ndc2.Y()-ndc0.Y())-(ndc2.X()-ndc0.X())*(ndc1.Y()-ndc0.Y()) <= 0 {
-				continue
-			}
-
-			s0 := ctx.ndc_to_screen(ndc0)
-			s1 := ctx.ndc_to_screen(ndc1)
-			s2 := ctx.ndc_to_screen(ndc2)
-
-			screen_triangles = append(screen_triangles, screen_triangle{
-				index:        uint16(index),
-				first_vertex: uint16(len(screen_vertices)),
-				average_z:    (s0.Z() + s1.Z() + s2.Z()) / 3,
-			})
-
-			screen_vertices = append(screen_vertices, s0, s1, s2)
+			push_triangle(uint16(index), v1, v2, v3)
 		}
 	}
 
@@ -429,6 +433,6 @@ func (self *game) Draw(screen *ebiten.Image) {
 		AntiAlias: true,
 	})
 
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f (%v)", ebiten.ActualTPS(), self.frametime))
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f (%v)", ebiten.ActualFPS(), self.frametime))
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Triangles: %d", len(screen_triangles)), 0, 14)
 }
