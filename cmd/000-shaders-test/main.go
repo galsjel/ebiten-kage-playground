@@ -234,7 +234,8 @@ func (self *Game) Draw(screen *ebiten.Image) {
 
 	ctx.look_at(eye, center, up)
 
-	// ctx.set_orthographic(-distance*game_aspect, distance*game_aspect, distance, -distance, 1, 1000)
+	// for some reason ortho reverses our depth values
+	// ctx.set_orthographic(-eye_distance*game_aspect, eye_distance*game_aspect, eye_distance, -eye_distance, 0.1, 10)
 	ctx.set_perpsective(30, game_aspect, 0.1, 10)
 
 	projection_view_matrix := ctx.projection_view_matrix()
