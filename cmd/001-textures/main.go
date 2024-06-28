@@ -4,11 +4,16 @@ import (
 	"bytes"
 	_ "embed"
 	"errors"
+	"flag"
 	"fmt"
 	"image"
 	_ "image/jpeg"
 	"io"
+	"log"
 	"math"
+	"os"
+	"runtime"
+	"runtime/pprof"
 	"slices"
 	"time"
 
@@ -31,15 +36,6 @@ type (
 	mat4  = mgl32.Mat4
 )
 
-var shader_source = `
-//kage:unit pixels
-package main
-
-func Fragment(dst vec4, src vec2, color vec4) vec4 {
-	return imageSrc0At(src)
-}
-`
-
 //go:embed wall.obj
 var wall_obj []byte
 
@@ -47,7 +43,38 @@ var wall_obj []byte
 var diffuse_jpg []byte
 var diffuse *ebiten.Image
 
+var cpu_profile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+var mem_profile = flag.String("memprofile", "", "write memory profile to `file`")
+
 func main() {
+	flag.Parse()
+
+	if *cpu_profile != "" {
+		f, err := os.Create(*cpu_profile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	if *mem_profile != "" {
+		defer func() {
+			f, err := os.Create(*mem_profile)
+			if err != nil {
+				log.Fatal("could not create memory profile:", err)
+			}
+			defer f.Close()
+			runtime.GC() // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatal("could not write memory profile:", err)
+			}
+		}()
+	}
+
 	mesh, err := load_obj(wall_obj)
 
 	if err != nil {
@@ -212,23 +239,23 @@ func clip_out_of_bounds(a vec4) bool {
 	return x < -w || x > w || y < -w || y > w || z < -w || z > w
 }
 
-func (c *context) clip_to_ndc(src vec4) vec3 {
-	w := 1.0 / src.W()
-	return vec3{src.X() * w, src.Y() * w, src.Z() * w}
+func (c *context) clip_to_ndc(src vec4) vec4 {
+	return src.Mul(1.0 / src.W())
 }
 
-func (c *context) ndc_to_screen(src vec3) vec3 {
+func (c *context) ndc_to_screen(src vec4) vec4 {
 	w_2 := float(c.viewport.w_2)
 	h_2 := float(c.viewport.h_2)
-	return vec3{
+	return vec4{
 		w_2*src.X() + w_2,
 		h_2*src.Y() + h_2,
 		0.5*src.Z() + 0.5,
+		1,
 	}
 }
 
 func (self *game) Layout(outerWidth, outerHeight int) (int, int) {
-	return game_width, game_height
+	return outerWidth, outerHeight
 }
 
 func (self *game) Update() error {
@@ -283,6 +310,78 @@ func (self *game) Update() error {
 	return nil
 }
 
+type plane struct {
+	origin vec4
+	normal vec4
+}
+
+// test determines if `v` is in front of the plane.
+func (p plane) test(v vec4) bool {
+	return v.Sub(p.origin).Dot(p.normal) > 0
+}
+
+// intersection returns the point of contact of a line segment between a->b to our plane.
+func (p plane) intersection(a, b vec4) vec4 {
+	u := b.Sub(a)
+	w := a.Sub(p.origin)
+	d := p.normal.Dot(u)
+	n := -p.normal.Dot(w)
+	return a.Add(u.Mul(n / d))
+}
+
+var clip_planes = [...]plane{
+	{origin: vec4{1, 0, 0, 1}, normal: vec4{-1, 0, 0, 1}}, // right
+	{origin: vec4{-1, 0, 0, 1}, normal: vec4{1, 0, 0, 1}}, // left
+	{origin: vec4{0, 1, 0, 1}, normal: vec4{0, -1, 0, 1}}, // bottom
+	{origin: vec4{0, -1, 0, 1}, normal: vec4{0, 1, 0, 1}}, // top
+	{origin: vec4{0, 0, 1, 1}, normal: vec4{0, 0, -1, 1}}, // front
+	{origin: vec4{0, 0, -1, 1}, normal: vec4{0, 0, 1, 1}}, // back
+}
+
+// https://en.wikipedia.org/wiki/Sutherland-Hodgman_algorithm
+func sutherland_hodgman_3d(p1, p2, p3 vec4) []vec4 {
+	output := []vec4{p1, p2, p3}
+	for _, plane := range clip_planes {
+		input := output
+		output = nil
+		if len(input) == 0 {
+			return nil
+		}
+		s := input[len(input)-1]
+		for _, e := range input {
+			if plane.test(e) {
+				if !plane.test(s) {
+					x := plane.intersection(s, e)
+					output = append(output, x)
+				}
+				output = append(output, e)
+			} else if plane.test(s) {
+				x := plane.intersection(s, e)
+				output = append(output, x)
+			}
+			s = e
+		}
+	}
+	return output
+}
+
+// https://en.wikipedia.org/wiki/Barycentric_coordinate_system
+func barycentric(p1, p2, p3, p vec3) vec3 {
+	v0 := p2.Sub(p1)
+	v1 := p3.Sub(p1)
+	v2 := p.Sub(p1)
+	d00 := v0.Dot(v0)
+	d01 := v0.Dot(v1)
+	d11 := v1.Dot(v1)
+	d20 := v2.Dot(v0)
+	d21 := v2.Dot(v1)
+	d := d00*d11 - d01*d01
+	v := (d11*d20 - d01*d21) / d
+	w := (d00*d21 - d01*d20) / d
+	u := 1 - v - w
+	return vec3{u, v, w}
+}
+
 func (self *game) Draw(screen *ebiten.Image) {
 	defer func(t time.Time) {
 		ft := time.Now().Sub(t)
@@ -318,54 +417,100 @@ func (self *game) Draw(screen *ebiten.Image) {
 
 	projection_view_matrix := ctx.projection_view_matrix()
 
-	var clip_vertices []vec4
+	var vertices_clip_space []vec4
 	for _, vertex := range self.mesh.vertices {
 		vertex := projection_view_matrix.Mul4x1(vertex.Vec4(1))
-		clip_vertices = append(clip_vertices, vertex)
+		vertices_clip_space = append(vertices_clip_space, vertex)
+	}
+
+	type vertex struct {
+		position vec4
+		texcoord vec2
+	}
+
+	interpolate_vec4 := func(v1, v2, v3 vec4, f vec3) (result vec4) {
+		result = result.Add(v1.Mul(f.X()))
+		result = result.Add(v2.Mul(f.Y()))
+		result = result.Add(v3.Mul(f.Z()))
+		return
+	}
+
+	interpolate_vec2 := func(v1, v2, v3 vec2, f vec3) (result vec2) {
+		result = result.Add(v1.Mul(f.X()))
+		result = result.Add(v2.Mul(f.Y()))
+		result = result.Add(v3.Mul(f.Z()))
+		return
+	}
+
+	interpolate_vertex := func(v1, v2, v3 vertex, f vec3) (result vertex) {
+		result.position = interpolate_vec4(v1.position, v2.position, v3.position, f)
+		result.texcoord = interpolate_vec2(v1.texcoord, v2.texcoord, v3.texcoord, f)
+		return
 	}
 
 	type screen_triangle struct {
-		index        uint16
-		first_vertex uint16
-		average_z    float
+		v1, v2, v3 vertex
+		distance   float
 	}
 
-	var screen_vertices []vec3
 	var screen_triangles []screen_triangle
 
-	push_triangle := func(index uint16, v1, v2, v3 vec4) {
-		ndc1 := ctx.clip_to_ndc(v1)
-		ndc2 := ctx.clip_to_ndc(v2)
-		ndc3 := ctx.clip_to_ndc(v3)
+	push_triangle := func(v1, v2, v3 vertex) {
+		ndc1 := ctx.clip_to_ndc(v1.position)
+		ndc2 := ctx.clip_to_ndc(v2.position)
+		ndc3 := ctx.clip_to_ndc(v3.position)
 
 		// back-face culling
 		if (ndc2.X()-ndc1.X())*(ndc3.Y()-ndc1.Y())-(ndc3.X()-ndc1.X())*(ndc2.Y()-ndc1.Y()) <= 0 {
 			return
 		}
 
-		s1 := ctx.ndc_to_screen(ndc1)
-		s2 := ctx.ndc_to_screen(ndc2)
-		s3 := ctx.ndc_to_screen(ndc3)
+		v1.position = ctx.ndc_to_screen(ndc1)
+		v2.position = ctx.ndc_to_screen(ndc2)
+		v3.position = ctx.ndc_to_screen(ndc3)
 
 		screen_triangles = append(screen_triangles, screen_triangle{
-			index:        uint16(index),
-			first_vertex: uint16(len(screen_vertices)),
-			average_z:    (s1.Z() + s2.Z() + s3.Z()) / 3,
+			v1:       v1,
+			v2:       v2,
+			v3:       v3,
+			distance: (v1.position.Z() + v2.position.Z() + v3.position.Z()) / 3,
 		})
-
-		screen_vertices = append(screen_vertices, s1, s2, s3)
 	}
 
-	for index, triangle := range self.mesh.triangles {
-		v1 := clip_vertices[triangle.v1]
-		v2 := clip_vertices[triangle.v2]
-		v3 := clip_vertices[triangle.v3]
+	for _, triangle := range self.mesh.triangles {
+		v1 := vertex{
+			position: vertices_clip_space[triangle.v1],
+			texcoord: self.mesh.texcoords[triangle.t1],
+		}
+		v2 := vertex{
+			position: vertices_clip_space[triangle.v2],
+			texcoord: self.mesh.texcoords[triangle.t2],
+		}
+		v3 := vertex{
+			position: vertices_clip_space[triangle.v3],
+			texcoord: self.mesh.texcoords[triangle.t3],
+		}
 
-		if clip_out_of_bounds(v1) || clip_out_of_bounds(v2) || clip_out_of_bounds(v3) {
-			// TODO: clip triangle
-			// https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm
+		if clip_out_of_bounds(v1.position) || clip_out_of_bounds(v2.position) || clip_out_of_bounds(v3.position) {
+			points := sutherland_hodgman_3d(v1.position, v2.position, v3.position)
+
+			p1 := v1.position.Vec3()
+			p2 := v2.position.Vec3()
+			p3 := v3.position.Vec3()
+
+			for i := 2; i < len(points); i++ {
+				b1 := barycentric(p1, p2, p3, points[0].Vec3())
+				b2 := barycentric(p1, p2, p3, points[i-1].Vec3())
+				b3 := barycentric(p1, p2, p3, points[i].Vec3())
+
+				push_triangle(
+					interpolate_vertex(v1, v2, v3, b1),
+					interpolate_vertex(v1, v2, v3, b2),
+					interpolate_vertex(v1, v2, v3, b3),
+				)
+			}
 		} else {
-			push_triangle(uint16(index), v1, v2, v3)
+			push_triangle(v1, v2, v3)
 		}
 	}
 
@@ -373,7 +518,7 @@ func (self *game) Draw(screen *ebiten.Image) {
 	var indices []uint16
 
 	slices.SortFunc(screen_triangles, func(a, b screen_triangle) int {
-		if a.average_z >= b.average_z {
+		if a.distance >= b.distance {
 			return -1
 		}
 		return 1
@@ -381,59 +526,56 @@ func (self *game) Draw(screen *ebiten.Image) {
 
 	// TODO: loop screen_vertices and populate vertices when we start using vertex color instead of triangle
 
+	tex_width := float(self.image.Bounds().Dx())
+	tex_height := float(self.image.Bounds().Dy())
+
 	for _, triangle := range screen_triangles {
-		s1 := screen_vertices[triangle.first_vertex]
-		s2 := screen_vertices[triangle.first_vertex+1]
-		s3 := screen_vertices[triangle.first_vertex+2]
+		v1 := triangle.v1
+		v2 := triangle.v2
+		v3 := triangle.v3
 
-		t := self.mesh.triangles[triangle.index]
-		t1 := self.mesh.texcoords[t.t1]
-		t2 := self.mesh.texcoords[t.t2]
-		t3 := self.mesh.texcoords[t.t3]
-
-		tex_width := float(self.image.Bounds().Dx())
-		tex_height := float(self.image.Bounds().Dy())
-
-		first_index := uint16(len(indices))
-		indices = append(indices, first_index, first_index+1, first_index+2)
 		vertices = append(vertices,
 			ebiten.Vertex{
-				SrcX:   t1[0] * tex_width,
-				SrcY:   t1[1] * tex_height,
-				DstX:   s1.X(),
-				DstY:   s1.Y(),
+				SrcX:   v1.texcoord.X() * tex_width,
+				SrcY:   v1.texcoord.Y() * tex_height,
+				DstX:   v1.position.X(),
+				DstY:   v1.position.Y(),
 				ColorR: 1,
 				ColorG: 1,
 				ColorB: 1,
 				ColorA: 1,
 			},
 			ebiten.Vertex{
-				SrcX:   t2[0] * tex_width,
-				SrcY:   t2[1] * tex_height,
-				DstX:   s2.X(),
-				DstY:   s2.Y(),
+				SrcX:   v2.texcoord.X() * tex_width,
+				SrcY:   v2.texcoord.Y() * tex_height,
+				DstX:   v2.position.X(),
+				DstY:   v2.position.Y(),
 				ColorR: 1,
 				ColorG: 1,
 				ColorB: 1,
 				ColorA: 1,
 			},
 			ebiten.Vertex{
-				SrcX:   t3[0] * tex_width,
-				SrcY:   t3[1] * tex_height,
-				DstX:   s3.X(),
-				DstY:   s3.Y(),
+				SrcX:   v3.texcoord.X() * tex_width,
+				SrcY:   v3.texcoord.Y() * tex_height,
+				DstX:   v3.position.X(),
+				DstY:   v3.position.Y(),
 				ColorR: 1,
 				ColorG: 1,
 				ColorB: 1,
 				ColorA: 1,
 			},
 		)
+
+		first_index := uint16(len(indices))
+		indices = append(indices, first_index, first_index+1, first_index+2)
 	}
 
 	screen.DrawTriangles(vertices, indices, self.image, &ebiten.DrawTrianglesOptions{
 		AntiAlias: true,
 	})
 
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("FPS: %.0f (%v)", ebiten.ActualFPS(), self.frametime))
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Triangles: %d", len(screen_triangles)), 0, 14)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("TPS: %.0f", ebiten.ActualTPS()), 0, 0)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("FPS: %.0f (%v)", ebiten.ActualFPS(), self.frametime), 0, 14)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("Triangles: %d", len(screen_triangles)), 0, 28)
 }
