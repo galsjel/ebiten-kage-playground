@@ -1,3 +1,5 @@
 # ebiten-kage-playground
 
-Place I play around.
+## [000-simple](./cmd/000-simple)
+
+![](/cmd/000-simple/preview.webp)
