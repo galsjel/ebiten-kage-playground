@@ -337,8 +337,8 @@ func (self *Game) Draw(screen *ebiten.Image) {
 		indices = append(indices, first_index, first_index+1, first_index+2)
 		vertices = append(vertices,
 			ebiten.Vertex{
-				SrcX:   0.5 + (t1[0] * tex_width),
-				SrcY:   0.5 + (t1[1] * tex_height),
+				SrcX:   t1[0] * tex_width,
+				SrcY:   t1[1] * tex_height,
 				DstX:   s1.X(),
 				DstY:   s1.Y(),
 				ColorR: 1,
@@ -347,8 +347,8 @@ func (self *Game) Draw(screen *ebiten.Image) {
 				ColorA: 1,
 			},
 			ebiten.Vertex{
-				SrcX:   0.5 + (t2[0] * tex_width),
-				SrcY:   0.5 + (t2[1] * tex_height),
+				SrcX:   t2[0] * tex_width,
+				SrcY:   t2[1] * tex_height,
 				DstX:   s2.X(),
 				DstY:   s2.Y(),
 				ColorR: 1,
@@ -357,8 +357,8 @@ func (self *Game) Draw(screen *ebiten.Image) {
 				ColorA: 1,
 			},
 			ebiten.Vertex{
-				SrcX:   0.5 + (t3[0] * tex_width),
-				SrcY:   0.5 + (t3[1] * tex_height),
+				SrcX:   t3[0] * tex_width,
+				SrcY:   t3[1] * tex_height,
 				DstX:   s3.X(),
 				DstY:   s3.Y(),
 				ColorR: 1,
