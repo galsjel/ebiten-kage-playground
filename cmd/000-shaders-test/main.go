@@ -234,8 +234,10 @@ func (self *Game) Draw(screen *ebiten.Image) {
 
 	ctx.look_at(eye, center, up)
 
-	// for some reason ortho reverses our depth values
+	// If you use orthographic then the Z axis will invert for everything.
+	// https://www.songho.ca/opengl/gl_projectionmatrix.html#perspective
 	// ctx.set_orthographic(-eye_distance*game_aspect, eye_distance*game_aspect, eye_distance, -eye_distance, 0.1, 10)
+
 	ctx.set_perpsective(30, game_aspect, 0.1, 10)
 
 	projection_view_matrix := ctx.projection_view_matrix()
