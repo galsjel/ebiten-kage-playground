@@ -1,0 +1,6 @@
+//kage:unit texels
+package main
+
+func Fragment(dst vec4, src vec2, col vec4) vec4 {
+	return imageSrc0At(dst.xy / 1024)
+}
