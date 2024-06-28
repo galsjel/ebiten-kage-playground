@@ -218,19 +218,24 @@ func (self *Game) Draw(screen *ebiten.Image) {
 	h := screen.Bounds().Dy()
 	ctx.set_viewport(0, 0, w, h)
 
+	// we'll use the cursor to give a little control to the camera
+	cx, cy := ebiten.CursorPosition()
+
 	cycle := float64(self.cycle) / 200.0
+	cycle -= float64(cx) / 100
 
-	const distance = 2
-	x := float(math.Cos(cycle) * distance)
-	z := float(math.Sin(cycle) * distance)
-
-	eye := vec3{x, -0.1, z}
+	const eye_distance = 2
+	eye_x := float(math.Cos(cycle) * eye_distance)
+	eye_y := -1 * float(h/2-cy) / 100
+	eye_z := float(math.Sin(cycle) * eye_distance)
+	eye := vec3{eye_x, eye_y, eye_z}
 	center := vec3{0, 0, 0}
 	up := vec3{0, 1, 0}
+
 	ctx.look_at(eye, center, up)
 
 	// ctx.set_orthographic(-distance*game_aspect, distance*game_aspect, distance, -distance, 1, 1000)
-	ctx.set_perpsective(30, game_aspect, 1, 100)
+	ctx.set_perpsective(30, game_aspect, 0.1, 10)
 
 	projection_view_matrix := ctx.projection_view_matrix()
 
