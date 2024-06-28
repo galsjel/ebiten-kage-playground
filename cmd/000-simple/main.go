@@ -71,7 +71,7 @@ func main() {
 		suzanne: mesh,
 	}
 
-	ebiten.SetWindowTitle("000-shaders-test")
+	ebiten.SetWindowTitle("000-simple")
 	ebiten.SetWindowSize(game_width, game_height)
 	ebiten.SetVsyncEnabled(false)
 
