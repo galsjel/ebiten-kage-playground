@@ -45,6 +45,7 @@ func Fragment(dst vec4, src vec2, rgba vec4) vec4 {
 	src_origin := imageSrc0Origin()
 
 	texel := src - src_origin
+	texel *= 1.0 / rgba.w
 	texel += src_origin
 	
 	return vec4(imageSrc0UnsafeAt(texel).rgb, 1)
@@ -449,19 +450,19 @@ func clip_out_of_bounds(a vec4) bool {
 	return x < -w || x > w || y < -w || y > w || z < -w || z > w
 }
 
-func (c *context) clip_to_ndc(src vec4) vec4 {
-	return src.Mul(1.0 / src.W())
+func (c *context) clip_to_ndc(src vec4) (ndc vec4) {
+	ndc = src.Vec3().Mul(1.0 / src.W()).Vec4(src.W())
+	return
 }
 
 func (c *context) ndc_to_screen(src vec4) vec4 {
 	w_2 := float(c.viewport.w_2)
 	h_2 := float(c.viewport.h_2)
-	z := 0.5*src.Z() + 0.5
 	return vec4{
 		w_2*src.X() + w_2,
 		h_2*src.Y() + h_2,
-		z,
-		1.0 / z, // precompute 1/z into W
+		src.Z(),
+		src.W(),
 	}
 }
 
@@ -557,36 +558,40 @@ func (ctx *context) draw_triangles(texture, target *ebiten.Image) {
 		tw := float(texture.Bounds().Dx())
 		th := float(texture.Bounds().Dy())
 
+		inv_w1 := 1.0 / v1.position.W()
+		inv_w2 := 1.0 / v2.position.W()
+		inv_w3 := 1.0 / v3.position.W()
+
 		ctx.vertices = append(ctx.vertices,
 			ebiten.Vertex{
-				SrcX:   v1.texcoord.X() * tw,
-				SrcY:   v1.texcoord.Y() * th,
+				SrcX:   v1.texcoord.X() * tw * inv_w1,
+				SrcY:   v1.texcoord.Y() * th * inv_w1,
 				DstX:   v1.position.X(),
 				DstY:   v1.position.Y(),
 				ColorR: 1,
 				ColorG: 1,
 				ColorB: 1,
-				ColorA: v1.position.W(),
+				ColorA: inv_w1,
 			},
 			ebiten.Vertex{
-				SrcX:   v2.texcoord.X() * tw,
-				SrcY:   v2.texcoord.Y() * th,
+				SrcX:   v2.texcoord.X() * tw * inv_w2,
+				SrcY:   v2.texcoord.Y() * th * inv_w2,
 				DstX:   v2.position.X(),
 				DstY:   v2.position.Y(),
 				ColorR: 1,
 				ColorG: 1,
 				ColorB: 1,
-				ColorA: v2.position.W(),
+				ColorA: inv_w2,
 			},
 			ebiten.Vertex{
-				SrcX:   v3.texcoord.X() * tw,
-				SrcY:   v3.texcoord.Y() * th,
+				SrcX:   v3.texcoord.X() * tw * inv_w3,
+				SrcY:   v3.texcoord.Y() * th * inv_w3,
 				DstX:   v3.position.X(),
 				DstY:   v3.position.Y(),
 				ColorR: 1,
 				ColorG: 1,
 				ColorB: 1,
-				ColorA: v3.position.W(),
+				ColorA: inv_w3,
 			},
 		)
 
