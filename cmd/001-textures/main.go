@@ -41,7 +41,6 @@ var wall_obj []byte
 
 //go:embed diffuse.jpg
 var diffuse_jpg []byte
-var diffuse *ebiten.Image
 
 var cpu_profile = flag.String("cpuprofile", "", "write cpu profile to `file`")
 var mem_profile = flag.String("memprofile", "", "write memory profile to `file`")
