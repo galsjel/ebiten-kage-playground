@@ -451,7 +451,13 @@ func clip_out_of_bounds(a vec4) bool {
 }
 
 func (c *context) clip_to_ndc(src vec4) (ndc vec4) {
-	ndc = src.Vec3().Mul(1.0 / src.W()).Vec4(src.W())
+	inv_w := 1.0 / src.W()
+	ndc = vec4{
+		src.X() * inv_w,
+		src.Y() * inv_w,
+		src.Z() * inv_w,
+		src.W(), //  retain W for later
+	}
 	return
 }
 
