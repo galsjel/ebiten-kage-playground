@@ -62,6 +62,8 @@ func main() {
 	}
 
 	if *mem_profile != "" {
+		_ = pprof.Lookup("heap")
+
 		defer func() {
 			f, err := os.Create(*mem_profile)
 			if err != nil {
@@ -309,28 +311,38 @@ var clip_planes = [...]plane{
 	{origin: vec4{0, 0, -1, 1}, normal: vec4{0, 0, 1, 1}}, // back
 }
 
+// scratch1 & 2 are temporary buffers to reduce allocations in
+// the sutherland_hodgman_3d function.
+var scratch1 = [9]vec4{} // 9 is a safe number to ensure we never
+var scratch2 = [9]vec4{} // run out of space while clipping
+
 // https://en.wikipedia.org/wiki/Sutherland-Hodgman_algorithm
+// this function is not concurrency safe since there are no mechanisms
+// to switch or protect scratch1 or scratch2.
 func sutherland_hodgman_3d(p1, p2, p3 vec4) []vec4 {
-	output := []vec4{p1, p2, p3}
+	output := append(scratch2[:0], p1, p2, p3)
+
 	for _, plane := range clip_planes {
-		input := output
-		output = nil
+		copy(scratch1[:], output)       // copy output polygon to our input
+		input := scratch1[:len(output)] //
+		output = scratch2[:0]           // clear our output polygon
+
 		if len(input) == 0 {
 			return nil
 		}
-		s := input[len(input)-1]
-		for _, e := range input {
-			if plane.test(e) {
-				if !plane.test(s) {
-					x := plane.intersection(s, e)
-					output = append(output, x)
+
+		prev_point := input[len(input)-1]
+
+		for _, point := range input {
+			if plane.test(point) {
+				if !plane.test(prev_point) {
+					output = append(output, plane.intersection(prev_point, point))
 				}
-				output = append(output, e)
-			} else if plane.test(s) {
-				x := plane.intersection(s, e)
-				output = append(output, x)
+				output = append(output, point)
+			} else if plane.test(prev_point) {
+				output = append(output, plane.intersection(prev_point, point))
 			}
-			s = e
+			prev_point = point
 		}
 	}
 	return output
