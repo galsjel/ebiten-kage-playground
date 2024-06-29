@@ -7,3 +7,6 @@ A place where I mess about with [Ebitengine](https://ebitengine.org/).
 
 ## [001-textures](./cmd/001-textures)
 ![](/cmd/001-textures/preview.webp)
+
+## [002-textures-perspective-correct](./cmd/002-textures-perspective-correct)
+![](/cmd/002-textures-perspective-correct/preview.webp)
