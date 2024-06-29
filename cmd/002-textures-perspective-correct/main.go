@@ -43,12 +43,14 @@ package main
 
 func Fragment(dst vec4, src vec2, rgba vec4) vec4 {
 	src_origin := imageSrc0Origin()
+	src_size := imageSrc0Size()
 
 	texel := src - src_origin
 	texel /= rgba.a
+	texel *= src_size
 	texel += src_origin
 	
-	return vec4(imageSrc0UnsafeAt(texel).rgb, 1)
+	return vec4(imageSrc0At(texel).rgb, 1)
 }
 `
 
@@ -561,17 +563,14 @@ func (ctx *context) draw_triangles(texture, target *ebiten.Image) {
 		v2 := triangle.v2
 		v3 := triangle.v3
 
-		tw := float(texture.Bounds().Dx())
-		th := float(texture.Bounds().Dy())
-
 		inv_w1 := 1.0 / v1.position.W()
 		inv_w2 := 1.0 / v2.position.W()
 		inv_w3 := 1.0 / v3.position.W()
 
 		ctx.vertices = append(ctx.vertices,
 			ebiten.Vertex{
-				SrcX:   v1.texcoord.X() * tw * inv_w1,
-				SrcY:   v1.texcoord.Y() * th * inv_w1,
+				SrcX:   v1.texcoord.X() * inv_w1,
+				SrcY:   v1.texcoord.Y() * inv_w1,
 				DstX:   v1.position.X(),
 				DstY:   v1.position.Y(),
 				ColorR: 1,
@@ -580,8 +579,8 @@ func (ctx *context) draw_triangles(texture, target *ebiten.Image) {
 				ColorA: inv_w1,
 			},
 			ebiten.Vertex{
-				SrcX:   v2.texcoord.X() * tw * inv_w2,
-				SrcY:   v2.texcoord.Y() * th * inv_w2,
+				SrcX:   v2.texcoord.X() * inv_w2,
+				SrcY:   v2.texcoord.Y() * inv_w2,
 				DstX:   v2.position.X(),
 				DstY:   v2.position.Y(),
 				ColorR: 1,
@@ -590,8 +589,8 @@ func (ctx *context) draw_triangles(texture, target *ebiten.Image) {
 				ColorA: inv_w2,
 			},
 			ebiten.Vertex{
-				SrcX:   v3.texcoord.X() * tw * inv_w3,
-				SrcY:   v3.texcoord.Y() * th * inv_w3,
+				SrcX:   v3.texcoord.X() * inv_w3,
+				SrcY:   v3.texcoord.Y() * inv_w3,
 				DstX:   v3.position.X(),
 				DstY:   v3.position.Y(),
 				ColorR: 1,
