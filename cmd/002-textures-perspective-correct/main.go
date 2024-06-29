@@ -45,7 +45,7 @@ func Fragment(dst vec4, src vec2, rgba vec4) vec4 {
 	src_origin := imageSrc0Origin()
 
 	texel := src - src_origin
-	texel *= 1.0 / rgba.w
+	texel /= rgba.a
 	texel += src_origin
 	
 	return vec4(imageSrc0UnsafeAt(texel).rgb, 1)
