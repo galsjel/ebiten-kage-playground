@@ -43,14 +43,20 @@ package main
 
 func Fragment(dst vec4, src vec2, rgba vec4) vec4 {
 	src_origin := imageSrc0Origin()
-	src_size := imageSrc0Size()
 
+	// atlas -> texture space
 	texel := src - src_origin
+
+	// perspective divide (W is stored in rgba.a)
 	texel /= rgba.a
-	texel *= src_size
+
+	// scale uv to pixels
+	texel *= imageSrc0Size()
+
+	// move back to atlas space
 	texel += src_origin
 	
-	return vec4(imageSrc0At(texel).rgb, 1)
+	return imageSrc0At(texel)
 }
 `
 
@@ -99,6 +105,7 @@ func main() {
 	const tile_size = texture_size / texture_subdivisions
 
 	texture := ebiten.NewImage(texture_size, texture_size)
+	texture.Fill(color.Black)
 
 	for row := 0; row < texture_subdivisions; row++ {
 		for col := 0; col < texture_subdivisions; col++ {
@@ -305,15 +312,15 @@ func (self *game) Update() error {
 			self.camera.forward = view.Row(2).Vec3().Mul(-1)
 
 			if ebiten.IsKeyPressed(ebiten.KeyW) || ebiten.IsKeyPressed(ebiten.KeyUp) {
-				self.camera.pos = self.camera.pos.Add(self.camera.forward)
+				self.camera.pos = self.camera.pos.Add(self.camera.forward.Mul(0.1))
 			} else if ebiten.IsKeyPressed(ebiten.KeyS) || ebiten.IsKeyPressed(ebiten.KeyDown) {
-				self.camera.pos = self.camera.pos.Sub(self.camera.forward)
+				self.camera.pos = self.camera.pos.Sub(self.camera.forward.Mul(0.1))
 			}
 
 			if ebiten.IsKeyPressed(ebiten.KeyD) || ebiten.IsKeyPressed(ebiten.KeyRight) {
-				self.camera.pos = self.camera.pos.Add(self.camera.right)
+				self.camera.pos = self.camera.pos.Add(self.camera.right.Mul(0.1))
 			} else if ebiten.IsKeyPressed(ebiten.KeyA) || ebiten.IsKeyPressed(ebiten.KeyLeft) {
-				self.camera.pos = self.camera.pos.Sub(self.camera.right)
+				self.camera.pos = self.camera.pos.Sub(self.camera.right.Mul(0.1))
 			}
 
 			self.camera.view_matrix = view.Mul4(mgl32.Translate3D(
