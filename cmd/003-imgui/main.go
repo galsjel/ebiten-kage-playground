@@ -141,10 +141,12 @@ func new_ui_context() *ui_context_t {
 	}
 }
 
-func (ctx *ui_context_t) draw(dst *ebiten.Image, drawer func(*ui_context_t)) {
+func (ctx *ui_context_t) start_frame(dst *ebiten.Image) {
 	clear(ctx.layers)
 	ctx.layers = append(ctx.layers[:0], dst)
-	drawer(ctx)
+}
+
+func (ctx *ui_context_t) end_frame() {
 	clear(ctx.uid_base_occurences)
 }
 
@@ -269,35 +271,39 @@ func (g *game) Draw(screen *ebiten.Image) {
 		ctx = new_ui_context()
 	}
 
+	ctx.start_frame(screen)
+
 	const columns = 16
 	const rows = 16
-	ctx.draw(screen, func(ctx *ui_context_t) {
-		ctx.set_layout(&grid_layout{
-			columns: columns,
-			rows:    rows,
-		})
-		for i := 0; i < columns; i++ {
-			for j := 0; j < rows; j++ {
-				ctx.button(button_t{
-					behavior: button_behavior_t{
-						on_enter: func(x, y int) {
-						},
-						on_exit: func(x, y int) {
-						},
-						on_activate: func() {
-							fmt.Println(">>> activate", i, j)
-						},
-						on_press: func(button ebiten.MouseButton) {
-						},
-						on_release: func(button ebiten.MouseButton) {
-						},
-					},
-					text: fmt.Sprintf("%d,%d", i, j),
-				})
 
-			}
-		}
+	ctx.set_layout(&grid_layout{
+		columns: columns,
+		rows:    rows,
 	})
+
+	for i := 0; i < columns; i++ {
+		for j := 0; j < rows; j++ {
+			ctx.button(button_t{
+				behavior: button_behavior_t{
+					on_enter: func(x, y int) {
+					},
+					on_exit: func(x, y int) {
+					},
+					on_activate: func() {
+						fmt.Println(">>> activate", i, j)
+					},
+					on_press: func(button ebiten.MouseButton) {
+					},
+					on_release: func(button ebiten.MouseButton) {
+					},
+				},
+				text: fmt.Sprintf("%d,%d", i, j),
+			})
+
+		}
+	}
+
+	ctx.end_frame()
 
 	var hover_trigger trigger_t
 	var cursor_over_trigger bool
