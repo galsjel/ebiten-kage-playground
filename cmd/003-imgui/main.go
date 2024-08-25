@@ -115,21 +115,29 @@ func (l *grid_layout) layout(src *ebiten.Image) (dst *ebiten.Image) {
 
 type game struct{}
 
-type uid_t uint64
+type uid_t struct {
+	base uint64
+	id   uint64
+}
+
+var uid_zero uid_t
+
 type ui_context_t struct {
-	layers            []*ebiten.Image
-	layout            layout_t
-	triggers          map[uid_t]trigger_t
-	trigger_pc_uid    map[uintptr]uid_t
-	frame_triggers    []trigger_t
-	hover_trigger_uid uid_t
-	press_trigger_uid uid_t
+	layers              []*ebiten.Image
+	layout              layout_t
+	triggers            map[uid_t]trigger_t
+	uid_base_occurences map[uintptr]uint64
+	uid_cycle           map[uid_t]int
+	frame_triggers      []trigger_t
+	hover_trigger_uid   uid_t
+	press_trigger_uid   uid_t
 }
 
 func new_ui_context() *ui_context_t {
 	return &ui_context_t{
-		trigger_pc_uid: make(map[uintptr]uid_t),
-		triggers:       make(map[uid_t]trigger_t),
+		triggers:            make(map[uid_t]trigger_t),
+		uid_base_occurences: make(map[uintptr]uint64),
+		uid_cycle:           make(map[uid_t]int),
 	}
 }
 
@@ -137,10 +145,7 @@ func (ctx *ui_context_t) draw(dst *ebiten.Image, drawer func(*ui_context_t)) {
 	clear(ctx.layers)
 	ctx.layers = append(ctx.layers[:0], dst)
 	drawer(ctx)
-
-	for k := range ctx.trigger_pc_uid {
-		ctx.trigger_pc_uid[k] = uid_t(k)
-	}
+	clear(ctx.uid_base_occurences)
 }
 
 func (ctx *ui_context_t) set_layout(layout layout_t) {
@@ -204,16 +209,18 @@ type button_t struct {
 	text     string
 }
 
-func (ctx *ui_context_t) uid(skip int) uid_t {
+func (ctx *ui_context_t) uid(skip int) (uid uid_t) {
 	var rpc [1]uintptr
 	runtime.Callers(skip, rpc[:])
 	frame, _ := runtime.CallersFrames(rpc[:]).Next()
-	pc := frame.PC * 4096 // arbitrary multiplier to space out UIDs for loops
-	if _, ok := ctx.trigger_pc_uid[pc]; !ok {
-		ctx.trigger_pc_uid[pc] = uid_t(pc)
+	pc := frame.PC
+	uid = uid_t{
+		base: uint64(pc),
+		id:   ctx.uid_base_occurences[pc],
 	}
-	ctx.trigger_pc_uid[pc]++
-	return ctx.trigger_pc_uid[pc]
+	ctx.uid_cycle[uid] = cycle
+	ctx.uid_base_occurences[pc]++
+	return
 }
 
 func (ctx *ui_context_t) button(button button_t) {
@@ -274,19 +281,15 @@ func (g *game) Draw(screen *ebiten.Image) {
 				ctx.button(button_t{
 					behavior: button_behavior_t{
 						on_enter: func(x, y int) {
-							fmt.Println("on_enter", i, j)
 						},
 						on_exit: func(x, y int) {
-							fmt.Println("on_exit", i, j)
 						},
 						on_activate: func() {
 							fmt.Println(">>> activate", i, j)
 						},
 						on_press: func(button ebiten.MouseButton) {
-							fmt.Println("on_press", i, j)
 						},
 						on_release: func(button ebiten.MouseButton) {
-							fmt.Println("on_release", i, j)
 						},
 					},
 					text: fmt.Sprintf("%d,%d", i, j),
@@ -309,7 +312,7 @@ func (g *game) Draw(screen *ebiten.Image) {
 	if uid := hover_trigger.uid; uid != ctx.hover_trigger_uid {
 		var prev trigger_t
 
-		if ctx.hover_trigger_uid != 0 {
+		if ctx.hover_trigger_uid != uid_zero {
 			prev = ctx.triggers[ctx.hover_trigger_uid]
 		}
 
@@ -317,9 +320,12 @@ func (g *game) Draw(screen *ebiten.Image) {
 
 		if !ok {
 			ctx.triggers[uid] = hover_trigger
+			next = hover_trigger
 		}
 
 		cx, cy := ebiten.CursorPosition()
+
+		log.Printf("%+v -> %+v", prev.uid, next.uid)
 
 		if on_exit := prev.on_exit; on_exit != nil {
 			on_exit(cx, cy)
@@ -351,7 +357,7 @@ func (g *game) Draw(screen *ebiten.Image) {
 	}
 
 	if mouse_just_released(ebiten.MouseButtonLeft) {
-		if uid := ctx.press_trigger_uid; uid != 0 {
+		if uid := ctx.press_trigger_uid; uid != uid_zero {
 			trigger := ctx.triggers[uid]
 
 			if on_release := trigger.on_release; on_release != nil {
@@ -364,7 +370,7 @@ func (g *game) Draw(screen *ebiten.Image) {
 					on_activate()
 				}
 			}
-			ctx.press_trigger_uid = 0
+			ctx.press_trigger_uid = uid_zero
 		}
 	}
 
